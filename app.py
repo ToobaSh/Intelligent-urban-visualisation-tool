@@ -21,7 +21,7 @@ from utils import (
 # ======================================
 
 st.set_page_config(
-    page_title="Outil de visualisation urbaine",
+    page_title="Intelligent Urban Visualization Tool",
     page_icon="🧭",
     layout="wide",
 )
@@ -32,21 +32,21 @@ MAPILLARY_TOKEN = os.getenv("MAPILLARY_TOKEN", "")
 GOOGLE_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
 # ======================================
-# Mapillary helpers (from your old app)
+# Mapillary helpers (from your first app)
 # ======================================
 
 MAP_FIELDS = "id,computed_geometry,thumb_1024_url,thumb_2048_url,captured_at,is_pano"
 
 
 def _deg_for_meters(lat_deg: float, meters: float):
-    """Approximate lat/lon offsets in degrees for given meters."""
+    """Approximate latitude/longitude offsets in degrees for a distance in meters."""
     dlat = meters / 111_320.0
     dlon = dlat * math.cos(math.radians(lat_deg))
     return dlat, dlon
 
 
 def _haversine_m(lat1, lon1, lat2, lon2):
-    """Distance in meters between two lat/lon points."""
+    """Distance in meters between two lat/lon points using the Haversine formula."""
     from math import radians, sin, cos, asin, sqrt
 
     R = 6371000.0
@@ -67,10 +67,13 @@ def mapillary_find_best(
     require_pano: bool = False,
 ):
     """
-    Cherche la meilleure image Mapillary près d'un point.
-    - require_pano=True : essaie d'abord de trouver un panorama.
-    - radii_m : liste de rayons (en mètres) à tester en bbox.
-    Retourne (thumb_url, meta_dict) ou (None, None).
+    Find the best Mapillary image near a point.
+
+    - If require_pano=True: prefer panoramic images (is_pano=True).
+    - radii_m: list of radii (in meters) to search with a bbox fallback.
+
+    Returns:
+        (thumb_url, meta_dict) or (None, None) if nothing found.
     """
     if not token or not token.startswith("MLY|"):
         return None, None
@@ -81,6 +84,11 @@ def mapillary_find_best(
     base = "https://graph.mapillary.com/images"
 
     def rank_items(items):
+        """
+        Rank images:
+        - panoramic images first
+        - then by distance (closest first)
+        """
         ranked = []
         for it in items:
             geom = (it.get("computed_geometry") or {}).get("coordinates")
@@ -89,11 +97,10 @@ def mapillary_find_best(
             else:
                 dist = float("inf")
             ranked.append((bool(it.get("is_pano")), dist, it))
-        # pano d'abord, puis distance croissante
-        ranked.sort(key=lambda x: (-int(x[0]), x[1]))
+        ranked.sort(key=lambda x: (-int(x[0]), x[1]))  # pano first, then distance
         return ranked
 
-    # 1) Essai simple avec 'closeto'
+    # 1) First try with 'closeto'
     try:
         r = requests.get(
             base,
@@ -122,7 +129,7 @@ def mapillary_find_best(
     except Exception:
         pass
 
-    # 2) Fallback avec bbox et différents rayons
+    # 2) Fallback: use bbox searches with multiple radii
     for radius in radii_m:
         dlat, dlon = _deg_for_meters(lat, radius)
         bbox = f"{lon - dlon},{lat - dlat},{lon + dlon},{lat + dlat}"
@@ -159,12 +166,13 @@ def mapillary_find_best(
 
 
 def _fmt_date(value) -> str:
-    """Handle Mapillary date strings or timestamps safely."""
+    """Convert Mapillary date or timestamp to an ISO date string when possible."""
     if not value:
         return ""
     if isinstance(value, (int, float)):
         try:
-            if value > 1e12:  # ms
+            # If > 1e12 it is likely in milliseconds
+            if value > 1e12:
                 value /= 1000.0
             return datetime.utcfromtimestamp(value).date().isoformat()
         except Exception:
@@ -182,6 +190,9 @@ def _fmt_date(value) -> str:
 
 
 def pannellum_html_from_image_bytes(img_bytes: bytes, height_px: int = 480) -> str:
+    """
+    Build an HTML block that uses Pannellum to render a 360° panorama from JPEG bytes.
+    """
     data_uri = "data:image/jpeg;base64," + base64.b64encode(img_bytes).decode(
         "ascii"
     )
@@ -214,8 +225,8 @@ def pannellum_html_from_image_bytes(img_bytes: bytes, height_px: int = 480) -> s
 @st.cache_data(ttl=3600)
 def cached_geocode(addr: str):
     """
-    Wrapper autour de nominatim_geocode fourni par utils.py.
-    On suppose qu'il retourne (lat, lon, label).
+    Small wrapper around nominatim_geocode provided in utils.py.
+    Expected return format: (lat, lon, label)
     """
     return nominatim_geocode(addr)
 
@@ -224,15 +235,15 @@ def cached_geocode(addr: str):
 def get_cadastre_parcel_from_wfs(lat, lon, bbox_deg=0.001, max_features=10):
     """
     Query IGN WFS (Parcellaire Express) around a point and return
-    the *closest* parcel as a small dict:
+    the *closest* parcel as a small dictionary:
 
     {
         "coords": [[lat, lon], ...],   # polygon for Folium
-        "area_m2": float | None,      # surface if available in attributes
-        "properties": dict            # raw WFS properties (debug)
+        "area_m2": float | None,      # parcel area if available
+        "properties": dict            # raw WFS attributes (debug)
     }
 
-    Returns None if nothing found.
+    Returns None if nothing is found.
     """
     wfs_url = "https://data.geopf.fr/wfs/ows"
 
@@ -289,6 +300,7 @@ def get_cadastre_parcel_from_wfs(lat, lon, bbox_deg=0.001, max_features=10):
         if not ring:
             continue
 
+        # Compute centroid
         sum_lon = sum(pt[0] for pt in ring)
         sum_lat = sum(pt[1] for pt in ring)
         n = len(ring)
@@ -335,7 +347,13 @@ def get_cadastre_parcel_from_wfs(lat, lon, bbox_deg=0.001, max_features=10):
 def get_plu_zone_from_wfs(lat, lon, bbox_deg=0.002, max_features=10):
     """
     Simple PLU zoning lookup using GPU WFS (zone_urba layer).
-    Returns a dict with zone code, zone label, and raw properties.
+
+    Returns:
+        {
+            "zone_code": str | None,
+            "zone_label": str | None,
+            "raw_properties": dict
+        }
     """
     wfs_url = "https://data.geopf.fr/wfs/ows"
 
@@ -394,6 +412,7 @@ def get_plu_zone_from_wfs(lat, lon, bbox_deg=0.002, max_features=10):
         or props.get("nom_zone")
     )
 
+    # Fallback: if no zone_code, try any field containing "zone"
     if not zone_code:
         for k, v in props.items():
             if "zone" in k.lower() and isinstance(v, str) and len(v) <= 10:
@@ -409,10 +428,11 @@ def get_plu_zone_from_wfs(lat, lon, bbox_deg=0.002, max_features=10):
 
 def build_plu_pdf_url_from_properties(props: dict) -> str | None:
     """
-    Construit l'URL du règlement PLU (PDF) à partir des propriétés GPU de la zone_urba.
-    On utilise :
-      - gpu_doc_id : identifiant du document dans le GPU
-      - nomfic     : nom du fichier PDF du règlement
+    Build the PLU regulation PDF URL from GPU zone_urba properties.
+
+    We use:
+      - gpu_doc_id : document ID in GPU
+      - nomfic     : PDF filename of the regulation
     """
     if not props:
         return None
@@ -423,7 +443,7 @@ def build_plu_pdf_url_from_properties(props: dict) -> str | None:
     if not doc_id or not filename:
         return None
 
-    # Pattern conforme à l'API GPU :
+    # GPU API pattern:
     # /api/document/{id}/download-file/{fileName}
     return f"https://www.geoportail-urbanisme.gouv.fr/api/document/{doc_id}/download-file/{filename}"
 
@@ -439,66 +459,66 @@ if "geo_result" not in st.session_state:
 # UI – Header & sidebar
 # ======================================
 
-st.title("🧭 Outil intelligent de visualisation urbaine")
+st.title("🧭 Intelligent Urban Visualization Tool")
 st.markdown(
-    "Adresse ➜ **carte**, **parcelle cadastrale**, **Street View** (Google / Mapillary), "
-    "**zonage PLU** et lien vers le **règlement**."
+    "Address ➜ **map**, **cadastral parcel**, **Street View** (Google / Mapillary), "
+    "**PLU zoning** and link to the official **regulation**."
 )
 st.markdown("---")
 
 with st.sidebar:
-    st.markdown("## Paramètres")
+    st.markdown("## Settings")
 
     provider = st.selectbox(
-        "Source d'images de rue",
+        "Street imagery provider",
         ["Auto", "Mapillary", "Google"],
-        help="Auto : essaie Mapillary d'abord, puis Google si nécessaire.",
+        help="Auto: try Mapillary first, then Google if needed.",
     )
 
     radius = st.slider(
-        "Rayon de recherche Mapillary (mètres)",
+        "Mapillary search radius (meters)",
         50,
         1000,
         150,
         step=50,
-        help="Contrôle la proximité des images Mapillary recherchées.",
+        help="Controls how far the app searches for nearby Mapillary images.",
     )
 
     pano_first = st.checkbox(
-        "Préférer les panoramas Mapillary", value=True
+        "Prefer panoramic Mapillary images", value=True
     )
 
     st.markdown("---")
-    st.markdown("### Clés API")
+    st.markdown("### API keys")
     st.caption(
-        "Les clés sont configurées côté serveur (non visibles pour l'utilisateur)."
+        "API keys are configured server-side (not visible to the user)."
     )
 
 # ======================================
-# UI – Adresse + géocodage
+# UI – Address + geocoding
 # ======================================
 
-st.markdown("### Adresse")
+st.markdown("### Address")
 
 address = st.text_input(
-    "Entrez une adresse :",
+    "Enter an address:",
     value="",
-    placeholder="Ex : Tour Eiffel, Paris",
+    placeholder="e.g. Eiffel Tower, Paris",
 )
 
 col_search, _ = st.columns([1, 3])
 with col_search:
-    search = st.button("Geocoder & afficher")
+    search = st.button("Geocode & display")
 
 if search:
     if not address.strip():
-        st.warning("Veuillez saisir une adresse.")
+        st.warning("Please enter an address.")
         st.stop()
 
     geo = cached_geocode(address.strip())
-    # cached_geocode doit renvoyer (lat, lon, label) ou None
+    # cached_geocode is expected to return (lat, lon, label) or None
     if not geo or not geo[0]:
-        st.error("Adresse introuvable. Essayez une autre requête.")
+        st.error("Address not found. Please try another query.")
         st.session_state.geo_result = None
     else:
         lat, lon, label = geo
@@ -511,7 +531,7 @@ if search:
 geo = st.session_state.geo_result
 
 if not geo:
-    st.info("Saisissez une adresse puis cliquez sur **Geocoder & afficher**.")
+    st.info("Enter an address and click **Geocode & display**.")
     st.stop()
 
 lat = geo["lat"]
@@ -519,53 +539,53 @@ lon = geo["lon"]
 label = geo["label"]
 
 st.success(
-    f"Géocodage réussi → **{label}**  \n"
-    f"Coordonnées : `{lat:.6f}, {lon:.6f}`"
+    f"Geocoding successful → **{label}**  \n"
+    f"Coordinates: `{lat:.6f}, {lon:.6f}`"
 )
 
 # ======================================
-# PLU info & parcelle
+# PLU info & parcel
 # ======================================
 
 plu_info = get_plu_zone_from_wfs(lat, lon)
 props = plu_info.get("raw_properties", {}) if plu_info else {}
 pdf_url = build_plu_pdf_url_from_properties(props) if plu_info else None
 
-# Parcelle cadastrale (coords + surface)
+# Cadastral parcel (coords + area)
 parcel = get_cadastre_parcel_from_wfs(lat, lon)
 
 # ======================================
-# Fiche synthèse
+# Summary sheet
 # ======================================
 
-st.markdown("### Fiche synthèse")
+st.markdown("### Summary sheet")
 
 col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
 
 with col_a:
-    st.markdown("**Adresse recherchée :**")
+    st.markdown("**Searched address:**")
     st.markdown(label)
 
 with col_b:
-    st.markdown("**Zone PLU :**")
+    st.markdown("**PLU zone:**")
     if plu_info and plu_info.get("zone_code"):
         st.markdown(f"`{plu_info['zone_code']}`")
     else:
-        st.markdown("_Inconnue_")
+        st.markdown("_Unknown_")
 
 with col_c:
-    st.markdown("**Règlement :**")
+    st.markdown("**Regulation:**")
     if pdf_url:
-        st.markdown(f"[📄 Voir le règlement (PDF)]({pdf_url})")
+        st.markdown(f"[📄 Open regulation (PDF)]({pdf_url})")
     else:
-        st.markdown("_Non disponible_")
+        st.markdown("_Not available_")
 
 with col_d:
-    st.markdown("**Surface parcelle :**")
+    st.markdown("**Parcel area:**")
     if parcel and parcel.get("area_m2"):
         st.markdown(f"≈ {parcel['area_m2']:.0f} m²")
     else:
-        st.markdown("_Non disponible_")
+        st.markdown("_Not available_")
 
 st.markdown("---")
 
@@ -574,12 +594,12 @@ st.markdown("---")
 # ======================================
 
 tab_carte, tab_plu, tab_street, tab_brut = st.tabs(
-    [" Carte & parcelle  ", " PLU / Zonage  ", " Vue panoramique  ", " Données brutes"]
+    ["  Map & parcel", "  PLU / Zoning", "  Street view", "  Raw data"]
 )
 
-# ---------------------- Carte & parcelle ---------------------- #
+# ---------------------- Map & parcel ---------------------- #
 with tab_carte:
-    st.subheader("Carte & parcelle cadastrale")
+    st.subheader("Map & cadastral parcel")
 
     m = folium.Map(location=[lat, lon], zoom_start=18, control_scale=True)
     folium.Marker([lat, lon], tooltip=label, popup=label).add_to(m)
@@ -591,7 +611,7 @@ with tab_carte:
             weight=2,
             fill=True,
             fill_opacity=0.2,
-            tooltip="Parcelle (IGN Parcellaire Express)",
+            tooltip="Parcel (IGN Parcellaire Express)",
         ).add_to(m)
     else:
         offset = 0.0003
@@ -607,49 +627,49 @@ with tab_carte:
             weight=2,
             fill=True,
             fill_opacity=0.1,
-            tooltip="Parcelle (démo, aucun cadastre trouvé)",
+            tooltip="Parcel (demo, no cadastre found)",
         ).add_to(m)
 
     st_folium(m, height=450, use_container_width=True)
 
-# ---------------------- PLU / Zonage ---------------------- #
+# ---------------------- PLU / Zoning ---------------------- #
 with tab_plu:
-    st.subheader("PLU / Zonage")
+    st.subheader("PLU / Zoning")
 
     if plu_info:
-        st.success("Zonage trouvé sur le Géoportail de l'Urbanisme.")
+        st.success("Zoning found via the national Urbanism Geoportal (GPU).")
 
         if plu_info.get("zone_code"):
-            st.write(f"**Code de zone :** `{plu_info['zone_code']}`")
+            st.write(f"**Zone code:** `{plu_info['zone_code']}`")
 
         if plu_info.get("zone_label"):
-            st.write(f"**Libellé de zone :** {plu_info['zone_label']}")
+            st.write(f"**Zone label:** {plu_info['zone_label']}")
 
-        st.markdown("#### 📄 Règlement PLU")
+        st.markdown("#### 📄 PLU regulation")
         if pdf_url:
-            st.markdown(f"[📥 Télécharger le règlement complet (PDF)]({pdf_url})")
+            st.markdown(f"[📥 Download full regulation (PDF)]({pdf_url})")
         else:
             st.info(
-                "Aucun lien direct vers le règlement PDF n'a été trouvé dans les propriétés GPU."
+                "No direct link to the regulation PDF was found in the GPU properties."
             )
 
-        with st.expander("Afficher les propriétés brutes (avancé)"):
+        with st.expander("Show raw properties (advanced)"):
             st.json(plu_info.get("raw_properties", {}))
     else:
         st.info(
-            "Aucune information de zonage PLU trouvée pour cette position sur le GPU "
-            "(la commune est peut-être au RNU ou pas encore numérisée)."
+            "No PLU zoning information was found at this location in the GPU "
+            "(the municipality may be under RNU or not yet digitized)."
         )
 
-# ---------------------- Street View / Panoramique ---------------------- #
+# ---------------------- Street View / Panoramic ---------------------- #
 with tab_street:
-    st.subheader("Vue panoramique (Mapillary / Google)")
+    st.subheader("Street-level view (Mapillary / Google)")
 
     chosen_provider = provider
     selected_thumb = None
     selected_meta = None
 
-    # Liste des rayons pour Mapillary (basés sur le slider)
+    # Radius list for Mapillary (based on the slider)
     radii = (
         radius,
         max(radius * 2, 300),
@@ -660,13 +680,13 @@ with tab_street:
         10000,
     )
 
-    # Auto mode: Mapillary d'abord, puis Google
+    # Auto mode: Mapillary first, then Google
     if provider == "Auto":
         if MAPILLARY_TOKEN:
             thumb, meta = mapillary_find_best(
                 lat, lon, MAPILLARY_TOKEN, radii_m=radii, require_pano=pano_first
             )
-            # Si on a demandé un pano mais rien trouvé, on retente sans contrainte
+            # If pano requested but not found, try again without pano constraint
             if pano_first and (not thumb or not isinstance(meta, dict)):
                 thumb, meta = mapillary_find_best(
                     lat, lon, MAPILLARY_TOKEN, radii_m=radii, require_pano=False
@@ -684,7 +704,7 @@ with tab_street:
     if chosen_provider == "Mapillary":
         if not MAPILLARY_TOKEN:
             st.warning(
-                "Veuillez configurer MAPILLARY_TOKEN pour utiliser les images Mapillary."
+                "Please configure MAPILLARY_TOKEN to use Mapillary imagery."
             )
         else:
             if not selected_thumb or not selected_meta:
@@ -693,7 +713,7 @@ with tab_street:
                 )
                 if pano_first and (not thumb or not isinstance(meta, dict)):
                     st.info(
-                        "Aucune image panoramique proche — recherche d'une photo la plus proche."
+                        "No panoramic image found nearby — searching for the closest available image."
                     )
                     thumb, meta = mapillary_find_best(
                         lat,
@@ -706,7 +726,7 @@ with tab_street:
                 thumb, meta = selected_thumb, selected_meta
 
             if not thumb or not isinstance(meta, dict):
-                st.error("Aucune imagerie Mapillary trouvée à proximité de ce point.")
+                st.error("No Mapillary imagery found near this point.")
             else:
                 static_url = meta.get("thumb_1024_url") or thumb
 
@@ -716,17 +736,17 @@ with tab_street:
                     img_resp.raise_for_status()
                     st.image(
                         img_resp.content,
-                        caption="Aperçu statique Mapillary",
+                        caption="Mapillary static preview",
                         use_column_width=True,
                     )
                 except Exception as e:
-                    st.warning(f"Erreur lors du chargement de l'image statique : {e}")
+                    st.warning(f"Error loading static image: {e}")
 
                 is_pano = bool(meta.get("is_pano"))
                 date_str = _fmt_date(meta.get("captured_at", ""))
 
                 if is_pano:
-                    st.markdown("##### Vue panoramique Mapillary (Pannellum)")
+                    st.markdown("##### Mapillary panoramic view (Pannellum)")
                     pano_url = meta.get("thumb_2048_url") or static_url
                     try:
                         pbytes = requests.get(pano_url, timeout=30)
@@ -739,24 +759,24 @@ with tab_street:
                         )
                     except Exception as e:
                         st.warning(
-                            f"Erreur lors du chargement du panorama (affichage statique uniquement) : {e}"
+                            f"Error loading panorama (showing static image only): {e}"
                         )
                 else:
                     st.info(
-                        "Cette image n'est pas panoramique (prise de vue standard)."
+                        "This image is not panoramic (standard street-level photo)."
                     )
 
                 pid = str(meta.get("id", ""))
                 footer = f"ID: `{pid}`"
                 if date_str:
-                    footer += f" — Date de prise de vue : {date_str}"
+                    footer += f" — Capture date: {date_str}"
                 st.caption(footer)
 
     # ---- Google Street View ---- #
     elif chosen_provider == "Google":
         if not GOOGLE_KEY:
             st.warning(
-                "Veuillez configurer GOOGLE_MAPS_API_KEY pour utiliser Google Street View."
+                "Please configure GOOGLE_MAPS_API_KEY to use Google Street View."
             )
         else:
             url = google_streetview_embed_url(lat, lon, GOOGLE_KEY)
@@ -764,29 +784,29 @@ with tab_street:
                 st.markdown(f"[Open Street View in a new tab ↗]({url})")
                 st.components.v1.iframe(url, height=450, scrolling=False)
             else:
-                st.info("Impossible de construire l'URL d'embed Google Street View.")
+                st.info("Could not build Google Street View embed URL.")
 
-    # ---- Aucun provider dispo ---- #
+    # ---- No provider available ---- #
     else:
         st.info(
-            "Aucun fournisseur d'imagerie de rue disponible ou aucune image trouvée à proximité."
+            "No street imagery provider is available, or no image was found near this location."
         )
 
-# ---------------------- Données brutes ---------------------- #
+# ---------------------- Raw data ---------------------- #
 with tab_brut:
-    st.subheader("Données brutes / debug")
+    st.subheader("Raw data / debug")
 
-    st.markdown("#### Coordonnées & adresse")
+    st.markdown("#### Coordinates & address")
     st.write({"lat": lat, "lon": lon, "label": label})
 
-    st.markdown("#### PLU (propriétés WFS)")
+    st.markdown("#### PLU (WFS properties)")
     if plu_info:
         st.json(plu_info.get("raw_properties", {}))
     else:
-        st.info("Aucune information PLU disponible pour cette position.")
+        st.info("No PLU information available for this location.")
 
-    st.markdown("#### Parcelle cadastrale (propriétés WFS)")
+    st.markdown("#### Cadastral parcel (WFS properties)")
     if parcel and parcel.get("properties"):
         st.json(parcel["properties"])
     else:
-        st.info("Aucune parcelle trouvée ou pas de propriétés disponibles.")
+        st.info("No parcel found or no attributes available.")
