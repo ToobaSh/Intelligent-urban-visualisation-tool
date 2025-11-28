@@ -67,7 +67,3 @@ Ideal for urban planners, architects, real-estate professionals, local authoriti
 
 ---
 
-## 🔧 Installation
-
-### 1. Clone the repository
-
