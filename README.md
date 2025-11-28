@@ -1,104 +1,68 @@
-🧭 Outil Intelligent de Visualisation Urbaine
+# 🧭 Outil intelligent de visualisation urbaine
 
-Application Streamlit pour explorer une adresse, sa parcelle cadastrale, son zonage PLU et l’imagerie Street View (Mapillary + Google).
+Application Streamlit permettant d’explorer une adresse en France :  
+parcelle cadastrale, zonage PLU, règlement PDF, images Mapillary et Google Street View.
 
-<img src="SCREENSHOT_HERE" width="700"/>
-🚀 Aperçu
+---
 
-Cet outil propose une visualisation complète et interactive pour analyser une adresse en France :
+##  Aperçu
 
-Géocodage (Nominatim → coordonnées GPS)
+Cet outil propose une visualisation complète pour analyser instantanément une adresse :
 
-Parcelle cadastrale (IGN Parcellaire Express)
+- Géocodage (adresse → coordonnées GPS)
+- Parcelle cadastrale (IGN WFS)
+- Zonage PLU + lien direct vers le règlement PDF (Géoportail de l’Urbanisme)
+- Vue panoramique (Mapillary + Google Street View)
+- Fiche synthèse regroupant toutes les informations
+- Interface Streamlit simple et professionnelle
 
-Zonage PLU + lien direct vers le règlement PDF (Géoportail de l’Urbanisme)
+Idéal pour les urbanistes, architectes, diagnostiqueurs, agents immobiliers, collectivités.
 
-Vue panoramique (Mapillary ou Google Street View selon disponibilité)
+---
 
-Fiche synthèse automatique
+##  Fonctionnalités
 
-Affichage complet dans une interface Streamlit moderne et simple
+### 1. Géocodage (Nominatim)
+- Transformation de l’adresse en coordonnées GPS
+- Affichage du libellé complet retourné par OpenStreetMap
 
-Idéal pour :
-urbanistes, architectes, diagnostiqueurs, bureaux d’études, agents immobiliers, collectivités.
+### 2. Parcelle cadastrale (IGN Parcellaire Express)
+- Requête automatique via l’API WFS d’IGN
+- Contour exact de la parcelle affiché sur une carte Folium
+- Surface en m² lorsque l’attribut « contenance » est disponible
 
-✨ Fonctionnalités
-🗺️ 1. Géocodage précis (Nominatim)
+### 3. Zonage PLU (Géoportail de l’Urbanisme)
+- Récupération automatique de la zone via WFS GPU
+- Affichage du code de zone et du libellé
+- Lien direct vers le règlement PDF officiel du PLU
 
-Conversion d’une adresse en coordonnées GPS
+### 4. Vue panoramique (StreetView)
+- Recherche avancée d’images Mapillary (thumbnail + panorama 360°)
+- Visionneuse panoramique intégrée (Pannellum)
+- Fallback automatique vers Google Street View si aucune image Mapillary n’est disponible
 
-Affichage du libellé complet
+### 5. Fiche synthèse
+- Adresse
+- Coordonnées GPS
+- Zone PLU
+- Surface parcelle
+- Lien règlement
+- Vue panoramique
 
-📐 2. Parcelle cadastrale (IGN)
+---
 
-Récupération automatique via WFS
+##  Architecture technique
 
-Affichage de la géométrie exacte sur Folium
+- Python 3+
+- Streamlit
+- Folium (cartographie)
+- Pannellum (panorama 360° via HTML/JS)
+- PyPDF2 (lecture du règlement PLU)
+- APIs utilisées :
+  - Nominatim (OSM)
+  - IGN WFS (Parcellaire Express)
+  - Géoportail de l’Urbanisme WFS
+  - Mapillary Graph API
+  - Google Maps API (Street View)
 
-Calcul de la surface (si disponible dans les attributs IGN)
-
-<img src="SCREENSHOT_PARCEL" width="600"/>
-🏙️ 3. PLU / Zonage (GPU)
-
-Récupération du zonage via WFS du Géoportail de l’Urbanisme
-
-Code et libellé de zone
-
-Lien direct vers le règlement PDF officiel du PLU
-
-Extraction légère d’informations (optionnel)
-
-<img src="SCREENSHOT_PLU" width="600"/>
-🚶 4. Vue panoramique (Mapillary + Google)
-
-Recherche avancée d’images Mapillary (avec fallback multi-rayon)
-
-Affichage :
-
-image statique haute résolution
-
-panorama immersif avec Pannellum
-
-lien direct vers Mapillary
-
-Fallback automatique vers Google Street View si nécessaire
-
-<img src="SCREENSHOT_PANO" width="600"/>
-📄 5. Fiche synthèse complète
-
-Adresse recherchée
-
-Coordonnées
-
-Zonage PLU
-
-Surface parcelle
-
-Lien vers règlement
-
-Aperçu Street View
-
-🧱 Architecture technique
-
-Backend :
-
-Python 3.10+
-
-Streamlit
-
-Requests
-
-PyPDF2
-
-Pannellum (via HTML/JS embed)
-
-Folium (cartographie)
-
-APIs utilisées :
-
-Service	Fonction
-Nominatim (OpenStreetMap)	Géocodage
-IGN Parcellaire Express WFS	Délimitation parcellaire
-Géoportail de l’Urbanisme (GPU) WFS	Zonage PLU
-Mapillary Graph API	Imagery + panoramas
-Google Maps API (facultatif)	StreetView fallback# Outil-intelligent-de-visualisation-urbaine
+---
