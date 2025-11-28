@@ -574,7 +574,7 @@ st.markdown("---")
 # ======================================
 
 tab_carte, tab_plu, tab_street, tab_brut = st.tabs(
-    ["🗺️ Carte & parcelle", "📑 PLU / Zonage", "🚶 Vue panoramique", "🧩 Données brutes"]
+    [" Carte & parcelle  ", " PLU / Zonage  ", " Vue panoramique  ", " Données brutes"]
 )
 
 # ---------------------- Carte & parcelle ---------------------- #
