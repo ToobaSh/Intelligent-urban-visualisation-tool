@@ -1,68 +1,73 @@
-# 🧭 Outil intelligent de visualisation urbaine
+# 🧭 Intelligent Urban Visualization Tool
 
-Application Streamlit permettant d’explorer une adresse en France :  
-parcelle cadastrale, zonage PLU, règlement PDF, images Mapillary et Google Street View.
-
----
-
-##  Aperçu
-
-Cet outil propose une visualisation complète pour analyser instantanément une adresse :
-
-- Géocodage (adresse → coordonnées GPS)
-- Parcelle cadastrale (IGN WFS)
-- Zonage PLU + lien direct vers le règlement PDF (Géoportail de l’Urbanisme)
-- Vue panoramique (Mapillary + Google Street View)
-- Fiche synthèse regroupant toutes les informations
-- Interface Streamlit simple et professionnelle
-
-Idéal pour les urbanistes, architectes, diagnostiqueurs, agents immobiliers, collectivités.
+A Streamlit application that provides instant urban information for any address in France:  
+cadastral parcel, PLU zoning, official regulation PDF, Mapillary imagery, and Google Street View fallback.
 
 ---
 
-##  Fonctionnalités
+##  Overview
 
-### 1. Géocodage (Nominatim)
-- Transformation de l’adresse en coordonnées GPS
-- Affichage du libellé complet retourné par OpenStreetMap
+This tool offers a complete, interactive analysis of any location:
 
-### 2. Parcelle cadastrale (IGN Parcellaire Express)
-- Requête automatique via l’API WFS d’IGN
-- Contour exact de la parcelle affiché sur une carte Folium
-- Surface en m² lorsque l’attribut « contenance » est disponible
+- Address geocoding (Nominatim / OSM)
+- Cadastral parcel retrieval and map display (IGN WFS)
+- PLU zoning via the national Urbanism Geoportal (GPU)
+- Direct link to the official PLU regulation PDF
+- Street-level imagery (Mapillary 360° panorama + Google Street View fallback)
+- Automatic summary sheet of all key information
 
-### 3. Zonage PLU (Géoportail de l’Urbanisme)
-- Récupération automatique de la zone via WFS GPU
-- Affichage du code de zone et du libellé
-- Lien direct vers le règlement PDF officiel du PLU
-
-### 4. Vue panoramique (StreetView)
-- Recherche avancée d’images Mapillary (thumbnail + panorama 360°)
-- Visionneuse panoramique intégrée (Pannellum)
-- Fallback automatique vers Google Street View si aucune image Mapillary n’est disponible
-
-### 5. Fiche synthèse
-- Adresse
-- Coordonnées GPS
-- Zone PLU
-- Surface parcelle
-- Lien règlement
-- Vue panoramique
+Ideal for urban planners, architects, real-estate professionals, local authorities, and students.
 
 ---
 
-##  Architecture technique
+##  Features
 
-- Python 3+
-- Streamlit
-- Folium (cartographie)
-- Pannellum (panorama 360° via HTML/JS)
-- PyPDF2 (lecture du règlement PLU)
-- APIs utilisées :
-  - Nominatim (OSM)
-  - IGN WFS (Parcellaire Express)
-  - Géoportail de l’Urbanisme WFS
+### 1. Address Geocoding (Nominatim)
+- Converts an address into GPS coordinates
+- Displays the full standardized label from OpenStreetMap
+
+### 2. Cadastral Parcel (IGN Parcellaire Express)
+- Automatic WFS request to IGN data services
+- Parcel boundary rendered on an interactive Folium map
+- Parcel area in m² when provided by IGN attributes
+
+### 3. PLU Zoning (Urbanism Geoportal – GPU)
+- Automated zoning retrieval through GPU WFS API
+- Displays zoning code and description
+- Direct link to the official regulation PDF
+
+### 4. Street-Level Imagery (Mapillary + Google)
+- Mapillary nearest-image search with multi-radius fallback
+- High-resolution thumbnails + immersive 360° panorama (Pannellum viewer)
+- Seamless fallback to Google Street View if Mapillary is unavailable
+
+### 5. Summary Sheet
+- Address  
+- GPS coordinates  
+- Parcel area  
+- PLU zoning  
+- Regulation PDF  
+- Street-level imagery  
+
+---
+
+##  Tech Stack
+
+- **Python 3+**
+- **Streamlit** for the UI
+- **Folium** for mapping
+- **Pannellum** for 360° panoramas
+- **PyPDF2** for extracting PLU PDF information
+- **APIs used**:
+  - Nominatim (OpenStreetMap)
+  - IGN WFS (Cadastral Parcellaire Express)
+  - Géoportail de l’Urbanisme (PLU WFS)
   - Mapillary Graph API
   - Google Maps API (Street View)
 
 ---
+
+## 🔧 Installation
+
+### 1. Clone the repository
+
