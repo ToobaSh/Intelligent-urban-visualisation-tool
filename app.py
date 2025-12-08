@@ -633,33 +633,58 @@ with tab_carte:
     st_folium(m, height=450, use_container_width=True)
 
 # ---------------------- PLU / Zoning ---------------------- #
+# ---------------------- PLU / Zoning ---------------------- #
 with tab_plu:
     st.subheader("PLU / Zoning")
 
     if plu_info:
-        st.success("Zoning found via the national Urbanism Geoportal (GPU).")
+        st.success("Zoning information retrieved from the Urbanism Geoportal (GPU).")
 
-        if plu_info.get("zone_code"):
-            st.write(f"**Zone code:** `{plu_info['zone_code']}`")
+        zone_code = plu_info.get("zone_code")
+        zone_label = plu_info.get("zone_label")
+        props = plu_info.get("raw_properties", {})
+        pdf_url = build_plu_pdf_url_from_properties(props)
 
-        if plu_info.get("zone_label"):
-            st.write(f"**Zone label:** {plu_info['zone_label']}")
+        # --- Human-friendly zoning display ---
+        st.markdown("### Zoning summary")
 
-        st.markdown("#### 📄 PLU regulation")
+        if zone_code:
+            st.write(f"**Zone code:** {zone_code}")
+
+        if zone_label:
+            st.write(f"**Zone description:** {zone_label}")
+
+        zone_type = props.get("typezone")
+        if zone_type:
+            st.write(f"**Zone type:** {zone_type}")
+
+        last_update = props.get("gpu_timestamp")
+        if last_update:
+            st.write(f"**Last update:** {last_update[:10]}")
+
         if pdf_url:
-            st.markdown(f"[📥 Download full regulation (PDF)]({pdf_url})")
+            st.markdown(f"📄 **Regulation PDF:** [Open document]({pdf_url})")
         else:
-            st.info(
-                "No direct link to the regulation PDF was found in the GPU properties."
-            )
+            st.info("No regulation PDF available for this zone.")
 
-        with st.expander("Show raw properties (advanced)"):
-            st.json(plu_info.get("raw_properties", {}))
+        # --- Optional: show a cleaned dictionary ---
+        st.markdown("### Details (simplified)")
+        simplified = {
+            "Zone code": zone_code,
+            "Zone type": zone_type,
+            "Zone description": zone_label,
+            "Regulation file": props.get("nomfic"),
+            "Last update": last_update[:10] if last_update else None,
+            "PLU reference": props.get("idurba"),
+        }
+        st.json(simplified)
+
+        # --- Full raw properties (hidden by default) ---
+        with st.expander("Full raw PLU data (advanced)"):
+            st.json(props)
     else:
-        st.info(
-            "No PLU zoning information was found at this location in the GPU "
-            "(the municipality may be under RNU or not yet digitized)."
-        )
+        st.info("No PLU zoning found at this location.")
+
 
 # ---------------------- Street View / Panoramic ---------------------- #
 with tab_street:
