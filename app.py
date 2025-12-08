@@ -344,6 +344,26 @@ def get_cadastre_parcel_from_wfs(lat, lon, bbox_deg=0.001, max_features=10):
 
 
 @st.cache_data(ttl=600)
+
+def format_plu_info(props: dict) -> dict:
+    """Convert raw GPU PLU fields into user-friendly labels."""
+
+    if not props:
+        return {}
+
+    readable = {
+        "Zone code": props.get("libelle"),
+        "Zone type": props.get("typezone"),
+        "Zone description": props.get("libelong"),
+        "Validation date": props.get("datvalid"),
+        "Regulation file": props.get("nomfic"),
+        "Authorized uses": props.get("destoui"),
+        "Prohibited uses": props.get("destnon"),
+    }
+
+    # Remove empty/null ones
+    return {k: v for k, v in readable.items() if v not in (None, "", "NULL")}
+
 def get_plu_zone_from_wfs(lat, lon, bbox_deg=0.002, max_features=10):
     """
     Simple PLU zoning lookup using GPU WFS (zone_urba layer).
