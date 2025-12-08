@@ -343,7 +343,7 @@ def get_cadastre_parcel_from_wfs(lat, lon, bbox_deg=0.001, max_features=10):
     }
 
 
-@st.cache_data(ttl=600)
+
 
 def format_plu_info(props: dict) -> dict:
     """Convert raw GPU PLU fields into user-friendly labels."""
@@ -364,6 +364,7 @@ def format_plu_info(props: dict) -> dict:
     # Remove empty/null ones
     return {k: v for k, v in readable.items() if v not in (None, "", "NULL")}
 
+@st.cache_data(ttl=600)
 def get_plu_zone_from_wfs(lat, lon, bbox_deg=0.002, max_features=10):
     """
     Simple PLU zoning lookup using GPU WFS (zone_urba layer).
